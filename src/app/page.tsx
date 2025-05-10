@@ -1,3 +1,5 @@
-export default function Home() {
-  return <></>;
+import IrcClient from "@/components/irc-client";
+
+export default function HomePage() {
+  return <IrcClient />;
 }
