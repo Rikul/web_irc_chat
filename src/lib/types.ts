@@ -17,6 +17,14 @@ export interface Channel {
   messages: Message[];
 }
 
+export interface AvailableChannelInfo {
+  id: string; // serverId#channelName
+  serverId: string;
+  name: string;
+  topic?: string;
+  userCount?: number;
+}
+
 export interface User {
   id: string; // nickname
   nickname: string;
@@ -29,6 +37,6 @@ export interface Message {
   nickname?: string; // System messages might not have a nickname
   content: string;
   type: 'message' | 'join' | 'part' | 'quit' | 'nick' | 'system' | 'error' | 'info';
-  channelId: string;
+  channelId: string; // For channel messages, this is serverId#channelName. For server-wide messages, this can be serverId.
   isSelf?: boolean;
 }

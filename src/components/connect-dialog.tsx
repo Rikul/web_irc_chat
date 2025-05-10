@@ -1,8 +1,9 @@
 "use client";
 
-import * as z from "zod"; // Import zod
+import * as z from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import React from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,8 +22,31 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import type { ServerConnection } from "@/lib/types";
-import { LogIn } from "lucide-react";
+import { LogIn, Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+const PREDEFINED_SERVERS = [
+  { value: "irc.libera.chat", label: "Libera.Chat" },
+  { value: "irc.efnet.org", label: "EFNet" },
+  { value: "irc.quakenet.org", label: "QuakeNet" },
+  { value: "irc.undernet.org", label: "UnderNet" },
+  { value: "irc.dal.net", label: "DALnet" },
+  { value: "localhost", label: "Localhost (test)"}
+];
 
 const formSchema = z.object({
   host: z.string().min(1, "Host is required."),
@@ -41,21 +65,23 @@ interface ConnectDialogProps {
 }
 
 export function ConnectDialog({ isOpen, onOpenChange, onConnect }: ConnectDialogProps) {
+  const [popoverOpen, setPopoverOpen] = React.useState(false);
+  
   const form = useForm<ConnectFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       host: "",
       port: 6667,
-      nickname: "",
+      nickname: "ViteUser",
       password: "",
-      realName: "",
+      realName: "ViteChat User",
     },
   });
 
   function onSubmit(values: ConnectFormValues) {
     onConnect(values);
     onOpenChange(false);
-    form.reset();
+    // form.reset(); // Keep some values like nickname for next connection
   }
 
   return (
@@ -75,11 +101,68 @@ export function ConnectDialog({ isOpen, onOpenChange, onConnect }: ConnectDialog
               control={form.control}
               name="host"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="flex flex-col">
                   <FormLabel>Server Host</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., irc.libera.chat" {...field} />
-                  </FormControl>
+                  <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={popoverOpen}
+                          className={cn(
+                            "w-full justify-between",
+                            !field.value && "text-muted-foreground"
+                          )}
+                        >
+                          {field.value
+                            ? PREDEFINED_SERVERS.find(
+                                (server) => server.value === field.value
+                              )?.label || field.value
+                            : "Select or type server"}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                      <Command shouldFilter={false} /* Allow typing custom values */ >
+                        <CommandInput 
+                          placeholder="Search or type server..."
+                          onValueChange={(search) => {
+                             // Allow typing custom server not in the list
+                            if (!PREDEFINED_SERVERS.some(s => s.value.toLowerCase().includes(search.toLowerCase()) || s.label.toLowerCase().includes(search.toLowerCase()))) {
+                               form.setValue("host", search, { shouldValidate: true });
+                            }
+                          }}
+                        />
+                        <CommandList>
+                          <CommandEmpty>No server found.</CommandEmpty>
+                          <CommandGroup>
+                            {PREDEFINED_SERVERS.map((server) => (
+                              <CommandItem
+                                key={server.value}
+                                value={server.value}
+                                onSelect={(currentValue) => {
+                                  form.setValue("host", currentValue === field.value ? "" : currentValue);
+                                  setPopoverOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    field.value === server.value
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
+                                {server.label} ({server.value})
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                   <FormMessage />
                 </FormItem>
               )}
