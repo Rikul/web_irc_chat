@@ -197,7 +197,7 @@ export default function IrcClient() {
 
   // Simulate incoming messages
   useEffect(() => {
-    if (!activeChannelId || !currentChannel || currentChannel.name === "status") return;
+    if (!activeChannelId || !currentChannel || currentChannel.name === "status" || !activeServer) return;
 
     const intervalId = setInterval(() => {
       const mockNicknames = ["Alice", "Bob", "CharlieBot"];
@@ -219,12 +219,12 @@ export default function IrcClient() {
     }, 7000 + Math.random() * 8000); 
 
     return () => clearInterval(intervalId);
-  }, [activeChannelId, activeServer?.nickname, currentChannel]);
+  }, [activeChannelId, activeServer, currentChannel]);
 
 
   // Simulate user join/part
   useEffect(() => {
-    if (!activeChannelId || !currentChannel || currentChannel.name === "status") return;
+    if (!activeChannelId || !currentChannel || currentChannel.name === "status" || !activeServer) return;
 
     const userActivityInterval = setInterval(() => {
       const isJoin = Math.random() > 0.5;
@@ -254,7 +254,7 @@ export default function IrcClient() {
     }, 20000 + Math.random() * 15000); 
 
     return () => clearInterval(userActivityInterval);
-  }, [activeChannelId, activeServer?.nickname, currentChannel]);
+  }, [activeChannelId, activeServer, currentChannel]);
 
   return (
     <SidebarProvider defaultOpen>
@@ -341,7 +341,7 @@ export default function IrcClient() {
           </SidebarFooter>
         </Sidebar>
 
-        <SidebarInset className="flex flex-col max-h-screen">
+        <SidebarInset className="flex flex-col max-h-screen min-w-0">
           {activeServer && activeChannelId && currentChannel ? (
             <>
               <header className="p-3 border-b flex items-center justify-between bg-card shadow-sm flex-shrink-0">
@@ -409,3 +409,4 @@ export default function IrcClient() {
     </SidebarProvider>
   );
 }
+
