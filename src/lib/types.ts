@@ -5,6 +5,7 @@ export interface ServerConnection {
   nickname: string;
   password?: string;
   realName?: string;
+  email?: string;
   isConnected: boolean;
 }
 

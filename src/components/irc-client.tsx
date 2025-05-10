@@ -14,9 +14,16 @@ import {
   SidebarGroupLabel,
   SidebarSeparator
 } from "@/components/ui/sidebar";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConnectDialog } from "./connect-dialog";
+import { SettingsDialog, type SettingsFormValues } from "./settings-dialog";
 import { ChannelList } from "./channel-list";
 import { AvailableChannelList } from "./available-channel-list";
 import { UserList } from "./user-list";
@@ -53,6 +60,7 @@ export default function IrcClient() {
   const [serverLogMessages, setServerLogMessages] = useState<Message[]>([]);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [isConnectDialogOpen, setIsConnectDialogOpen] = useState(false);
+  const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
   const [joinChannelName, setJoinChannelName] = useState("");
   const { toast } = useToast();
 
@@ -164,7 +172,6 @@ export default function IrcClient() {
     }
     if (channel && activeServer) {
       // Add back to available channels (if it was originally from a discoverable list)
-      // For simplicity, let's assume it might have been. This part could be more sophisticated.
       if (!availableChannels.find(ac => ac.name === channel.name)) {
         setAvailableChannels(prev => [...prev, { 
           id: channel.id, 
@@ -172,7 +179,7 @@ export default function IrcClient() {
           name: channel.name, 
           topic: channel.topic, 
           userCount: channel.users.length 
-        }]);
+        }].sort((a,b) => a.name.localeCompare(b.name)));
       }
       toast({
         title: "Channel Left",
@@ -193,6 +200,38 @@ export default function IrcClient() {
         ? { ...c, messages: [...c.messages, newMessage] }
         : c
     ));
+  };
+
+  const handleSaveSettings = (newSettings: SettingsFormValues) => {
+    if (activeServer) {
+      const oldNickname = activeServer.nickname;
+      setActiveServer(prev => prev ? ({
+        ...prev,
+        nickname: newSettings.nickname,
+        realName: newSettings.realName,
+        email: newSettings.email,
+      }) : null);
+
+      if (oldNickname !== newSettings.nickname) {
+         // Simulate NICK change message in all joined channels
+        const nickChangeMessageContent = `${oldNickname} is now known as ${newSettings.nickname}`;
+        const nickMessage = createMockMessage(activeServer.id, nickChangeMessageContent, undefined, 'nick');
+        
+        setChannels(prevChannels => prevChannels.map(ch => ({
+          ...ch,
+          users: ch.users.map(u => u.nickname === oldNickname ? { ...u, nickname: newSettings.nickname } : u),
+          messages: [...ch.messages, createMockMessage(ch.id, nickChangeMessageContent, undefined, 'nick')]
+        })));
+        
+        // Add to server log as well
+        setServerLogMessages(prevLogs => [...prevLogs, nickMessage]);
+
+        toast({
+          title: "Nickname Changed",
+          description: `You are now known as ${newSettings.nickname}.`,
+        });
+      }
+    }
   };
 
   // Simulate incoming messages
@@ -258,7 +297,7 @@ export default function IrcClient() {
 
   return (
     <SidebarProvider defaultOpen>
-      <div className="flex h-screen max-h-screen overflow-hidden bg-background">
+      <div className="flex h-screen w-screen max-h-screen max-w-screen overflow-hidden bg-background">
         <Sidebar collapsible="icon" className="border-r shadow-md">
           <SidebarHeader className="p-3 items-center">
             <div className="flex items-center gap-2 w-full">
@@ -290,28 +329,44 @@ export default function IrcClient() {
                     </Button>
                   </div>
                 </SidebarGroup>
+                
                 <SidebarSeparator />
-                <SidebarGroup className="p-2">
-                  <SidebarGroupLabel className="flex items-center gap-2 mb-1">
-                    <Hash className="h-4 w-4" /> Joined Channels
-                  </SidebarGroupLabel>
-                  <ChannelList
-                    channels={channels.filter(c => c.name !== 'status')} // Exclude status channel from user-joinable list
-                    activeChannelId={activeChannelId}
-                    onSelectChannel={setActiveChannelId}
-                    onLeaveChannel={handleLeaveChannel}
-                  />
-                </SidebarGroup>
+                <Accordion type="single" collapsible defaultValue="joined-channels" className="w-full px-2 group-data-[collapsible=icon]:px-0">
+                  <AccordionItem value="joined-channels" className="border-none">
+                    <AccordionTrigger className="py-2 text-sm hover:no-underline group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:py-2 group-data-[collapsible=icon]:px-1">
+                      <div className="flex items-center gap-2 text-sidebar-foreground/80 hover:text-sidebar-foreground">
+                        <Hash className="h-4 w-4" />
+                        <span className="font-medium group-data-[collapsible=icon]:hidden">Joined Channels</span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="pb-0 pt-1 group-data-[collapsible=icon]:hidden">
+                      <ChannelList
+                        channels={channels.filter(c => c.name !== 'status')}
+                        activeChannelId={activeChannelId}
+                        onSelectChannel={setActiveChannelId}
+                        onLeaveChannel={handleLeaveChannel}
+                      />
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
+
                 <SidebarSeparator />
-                <SidebarGroup className="p-2">
-                  <SidebarGroupLabel className="flex items-center gap-2 mb-1">
-                     <List className="h-4 w-4" /> Available Channels
-                  </SidebarGroupLabel>
-                  <AvailableChannelList
-                    channels={availableChannels}
-                    onJoinChannel={handleJoinFromAvailable}
-                  />
-                </SidebarGroup>
+                <Accordion type="single" collapsible defaultValue="available-channels" className="w-full px-2 group-data-[collapsible=icon]:px-0">
+                  <AccordionItem value="available-channels" className="border-none">
+                    <AccordionTrigger className="py-2 text-sm hover:no-underline group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:py-2 group-data-[collapsible=icon]:px-1">
+                       <div className="flex items-center gap-2 text-sidebar-foreground/80 hover:text-sidebar-foreground">
+                        <List className="h-4 w-4" />
+                        <span className="font-medium group-data-[collapsible=icon]:hidden">Available Channels</span>
+                      </div>
+                    </AccordionTrigger>
+                    <AccordionContent className="pb-0 pt-1 group-data-[collapsible=icon]:hidden">
+                      <AvailableChannelList
+                        channels={availableChannels}
+                        onJoinChannel={handleJoinFromAvailable}
+                      />
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               </>
             ) : (
               <div className="p-2 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:justify-center">
@@ -341,7 +396,7 @@ export default function IrcClient() {
           </SidebarFooter>
         </Sidebar>
 
-        <SidebarInset className="flex flex-col max-h-screen min-w-0">
+        <SidebarInset className="flex flex-col max-h-screen min-w-0 flex-1"> {/* Added flex-1 and min-w-0 */}
           {activeServer && activeChannelId && currentChannel ? (
             <>
               <header className="p-3 border-b flex items-center justify-between bg-card shadow-sm flex-shrink-0">
@@ -355,9 +410,9 @@ export default function IrcClient() {
                     {currentChannel.topic && <p className="text-xs text-muted-foreground truncate max-w-xs md:max-w-md lg:max-w-lg">{currentChannel.topic}</p>}
                   </div>
                 </div>
-                <Button variant="ghost" size="icon" className="text-muted-foreground">
+                <Button variant="ghost" size="icon" className="text-muted-foreground" onClick={() => setIsSettingsDialogOpen(true)}>
                   <Settings className="h-5 w-5" />
-                  <span className="sr-only">Channel Settings</span>
+                  <span className="sr-only">Application Settings</span>
                 </Button>
               </header>
               <main className="flex flex-1 overflow-hidden p-2 md:p-3 gap-2 md:gap-3 bg-secondary/50">
@@ -406,7 +461,18 @@ export default function IrcClient() {
         onOpenChange={setIsConnectDialogOpen}
         onConnect={handleConnect}
       />
+      {activeServer && (
+        <SettingsDialog
+          isOpen={isSettingsDialogOpen}
+          onOpenChange={setIsSettingsDialogOpen}
+          currentSettings={{
+            nickname: activeServer.nickname,
+            realName: activeServer.realName,
+            email: activeServer.email,
+          }}
+          onSave={handleSaveSettings}
+        />
+      )}
     </SidebarProvider>
   );
 }
-

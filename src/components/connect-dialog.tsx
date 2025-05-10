@@ -54,6 +54,7 @@ const formSchema = z.object({
   nickname: z.string().min(1, "Nickname is required.").max(32),
   password: z.string().optional(),
   realName: z.string().optional(),
+  email: z.string().email("Invalid email address.").optional().or(z.literal('')),
 });
 
 type ConnectFormValues = z.infer<typeof formSchema>;
@@ -75,6 +76,7 @@ export function ConnectDialog({ isOpen, onOpenChange, onConnect }: ConnectDialog
       nickname: "ViteUser",
       password: "",
       realName: "ViteChat User",
+      email: "",
     },
   });
 
@@ -214,6 +216,19 @@ export function ConnectDialog({ isOpen, onOpenChange, onConnect }: ConnectDialog
                   <FormLabel>Real Name (Optional)</FormLabel>
                   <FormControl>
                     <Input placeholder="Your Real Name" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email (Optional)</FormLabel>
+                  <FormControl>
+                    <Input type="email" placeholder="your@email.com" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
