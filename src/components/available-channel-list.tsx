@@ -35,7 +35,7 @@ export function AvailableChannelList({
   }
 
   return (
-    <ScrollArea className="h-48"> {/* Removed group-data-[collapsible=icon]:hidden */}
+    <ScrollArea className="h-full"> {/* Removed group-data-[collapsible=icon]:hidden */}
       <ul className="space-y-1 p-1">
         {channels.map((channel) => (
           <li

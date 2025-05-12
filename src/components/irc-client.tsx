@@ -306,12 +306,33 @@ export default function IrcClient() {
             </div>
           </SidebarHeader>
           <SidebarSeparator />
-          <SidebarContent className="p-0">
+          <SidebarContent className="p-0 overflow-auto 
+              [&::-webkit-scrollbar]:w-2
+              [&::-webkit-scrollbar-track]:bg-gray-100
+              [&::-webkit-scrollbar-thumb]:bg-gray-300
+              dark:[&::-webkit-scrollbar-track]:bg-neutral-700
+              dark:[&::-webkit-scrollbar-thumb]:bg-neutral-500">
             {activeServer ? (
               <>
                 <SidebarGroup className="p-2">
                   <SidebarGroupLabel className="flex items-center gap-2 mb-1">
-                    <ServerIcon className="h-4 w-4" /> {activeServer.host}
+                      <div className="flex items-center gap-2 w-full group-data-[collapsible=icon]:justify-center">
+
+                        <Avatar className="h-5 w-5">
+                        <AvatarImage src={`https://picsum.photos/seed/${activeServer.nickname}/40/40`} data-ai-hint="avatar person" />
+                        <AvatarFallback>{activeServer.nickname.substring(0,1).toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <span className="font-medium truncate group-data-[collapsible=icon]:hidden">{activeServer.nickname}</span>
+                      </div>
+                        {/* <ServerIcon className="h-4 w-4" /> */}
+                      {activeServer.host}
+
+                      <Button variant="ghost" size="icon" onClick={() => { if (activeServer) handleDisconnect(); else setIsConnectDialogOpen(true);}} className="group-data-[collapsible=icon]:mx-auto"
+                          tooltip={{ children: activeServer ? 'Disconnect' : 'Connect', side: 'right' }}
+                      >
+                        {activeServer ? <LogOut className="h-5 w-5" /> : <LogIn className="h-5 w-5" />}
+                      </Button>
+                                
                   </SidebarGroupLabel>
                   <div className="flex gap-1 mb-2 px-2 group-data-[collapsible=icon]:flex-col group-data-[collapsible=icon]:items-center">
                     <Input
@@ -351,7 +372,7 @@ export default function IrcClient() {
                 </Accordion>
 
                 <SidebarSeparator />
-                <Accordion type="single" collapsible defaultValue="available-channels" className="w-full px-2 group-data-[collapsible=icon]:px-0">
+                <Accordion type="single" collapsible defaultValue="available-channels" className="w-full group-data-[collapsible=icon]:px-0">
                   <AccordionItem value="available-channels" className="border-none">
                     <AccordionTrigger className="py-2 text-sm hover:no-underline group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:py-2 group-data-[collapsible=icon]:px-1">
                        <div className="flex items-center gap-2 text-sidebar-foreground/80 hover:text-sidebar-foreground">
@@ -377,23 +398,7 @@ export default function IrcClient() {
               </div>
             )}
           </SidebarContent>
-          <SidebarSeparator />
-          <SidebarFooter className="p-3 items-center">
-            {activeServer && (
-               <div className="flex items-center gap-2 w-full group-data-[collapsible=icon]:justify-center">
-                 <Avatar className="h-8 w-8">
-                   <AvatarImage src={`https://picsum.photos/seed/${activeServer.nickname}/40/40`} data-ai-hint="avatar person" />
-                   <AvatarFallback>{activeServer.nickname.substring(0,1).toUpperCase()}</AvatarFallback>
-                 </Avatar>
-                <span className="font-medium truncate group-data-[collapsible=icon]:hidden">{activeServer.nickname}</span>
-              </div>
-            )}
-             <Button variant="ghost" size="icon" onClick={() => { if (activeServer) handleDisconnect(); else setIsConnectDialogOpen(true);}} className="group-data-[collapsible=icon]:mx-auto"
-                tooltip={{ children: activeServer ? 'Disconnect' : 'Connect', side: 'right' }}
-             >
-              {activeServer ? <LogOut className="h-5 w-5" /> : <LogIn className="h-5 w-5" />}
-            </Button>
-          </SidebarFooter>
+
         </Sidebar>
 
         <SidebarInset className="flex flex-col max-h-screen min-w-0 flex-1"> {/* Added flex-1 and min-w-0 */}

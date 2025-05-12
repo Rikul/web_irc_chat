@@ -21,6 +21,8 @@ export function MessageArea({ messages, channelName }: MessageAreaProps) {
   useEffect(() => {
     if (viewportRef.current) {
       viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
+      viewportRef.current.scrollIntoView(false);
+
     }
   }, [messages]);
 
