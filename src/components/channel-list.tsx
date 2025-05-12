@@ -1,9 +1,10 @@
+
 "use client";
 
 import type { Channel } from "@/lib/types";
 import { SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Hash, X, MessageCircle } from "lucide-react";
+import { Hash, X, User } from "lucide-react"; // User icon for PMs
 
 interface ChannelListProps {
   channels: Channel[];
@@ -21,7 +22,7 @@ export function ChannelList({
   if (channels.length === 0) {
     return (
       <div className="p-4 text-sm text-muted-foreground">
-        No channels joined yet.
+        No channels or conversations.
       </div>
     );
   }
@@ -34,10 +35,10 @@ export function ChannelList({
             onClick={() => onSelectChannel(channel.id)}
             isActive={channel.id === activeChannelId}
             className="justify-between w-full"
-            tooltip={{ children: channel.name, side: 'right' }}
+            tooltip={{ children: `${channel.name}${channel.topic?.text ? ` - ${channel.topic.text}` : ''}`, side: 'right' }}
           >
             <div className="flex items-center gap-2 overflow-hidden">
-              <Hash className="h-4 w-4" />
+              {channel.name.startsWith("#") ? <Hash className="h-4 w-4" /> : <User className="h-4 w-4" />}
               <span className="truncate">{channel.name}</span>
             </div>
           </SidebarMenuButton>
@@ -49,7 +50,7 @@ export function ChannelList({
               e.stopPropagation();
               onLeaveChannel(channel.id);
             }}
-            aria-label={`Leave channel ${channel.name}`}
+            aria-label={`Leave ${channel.name.startsWith("#") ? 'channel' : 'conversation with'} ${channel.name}`}
           >
             <X className="h-4 w-4" />
           </Button>
