@@ -3,32 +3,51 @@
 
 import type { Message } from "@/lib/types";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import React, { useEffect, useRef } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { UserPlus, UserMinus, LogOutIcon, Info, AlertTriangle, Edit3, Settings2, ArrowRightLeft, Zap } from "lucide-react";
+import { UserPlus, UserMinus, LogOutIcon, Info, AlertTriangle, Edit3, Settings2, ArrowRightLeft, Zap, Terminal } from "lucide-react";
 
 
 interface MessageAreaProps {
   messages: Message[];
   channelName?: string;
+  isServerLogView?: boolean;
+  onOpenServerLogDialog?: () => void;
 }
 
-export function MessageArea({ messages, channelName }: MessageAreaProps) {
+export function MessageArea({ messages, channelName, isServerLogView, onOpenServerLogDialog }: MessageAreaProps) {
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (viewportRef.current) {
-      // A slight delay can sometimes help ensure the scroll happens after all DOM updates.
+    if (viewportRef.current && !isServerLogView) { // Don't auto-scroll if it's the server log placeholder
       setTimeout(() => {
         if (viewportRef.current) {
             viewportRef.current.scrollTop = viewportRef.current.scrollHeight;
         }
       }, 50);
     }
-  }, [messages]);
+  }, [messages, isServerLogView]);
+
+  if (isServerLogView) {
+    return (
+      <div className="h-full flex-grow bg-background rounded-lg shadow-inner flex items-center justify-center p-4">
+        <div className="text-center text-muted-foreground">
+          <Terminal className="h-12 w-12 mx-auto mb-4 text-primary" />
+          <p className="mb-2 text-lg font-medium">Server Log View</p>
+          <p className="mb-4">Server messages, notices, and raw IRC data are displayed in a separate window.</p>
+          {onOpenServerLogDialog && (
+            <Button onClick={onOpenServerLogDialog} variant="outline">
+              <Terminal className="mr-2 h-4 w-4" /> Open Server Log Window
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
 
   const renderMessageContent = (msg: Message) => {
@@ -74,7 +93,7 @@ export function MessageArea({ messages, channelName }: MessageAreaProps) {
             className={cn(
               "flex animate-in fade-in slide-in-from-bottom-2 duration-300",
               msg.isSelf && msg.type === 'message' ? "justify-end" : "justify-start",
-              (msg.type !== 'message' && msg.type !== 'action') && "justify-start" // System messages, etc. on left
+              (msg.type !== 'message' && msg.type !== 'action') && "justify-start" 
             )}
           >
             {(msg.type === 'message' || msg.type === 'action') && !msg.isSelf && msg.nickname && (
@@ -88,7 +107,7 @@ export function MessageArea({ messages, channelName }: MessageAreaProps) {
             <div
               className={cn(
                 "max-w-[70%]",
-                (msg.type !== 'message' && msg.type !== 'action') && "max-w-full" // System messages can take full width
+                (msg.type !== 'message' && msg.type !== 'action') && "max-w-full" 
               )}
             >
               {(msg.type === 'message' || msg.type === 'action') && msg.nickname && (
@@ -108,12 +127,12 @@ export function MessageArea({ messages, channelName }: MessageAreaProps) {
                     ? "bg-primary text-primary-foreground rounded-br-none"
                     : (msg.type === 'message' || msg.type === 'action')
                     ? "bg-secondary text-secondary-foreground rounded-bl-none"
-                    : "text-muted-foreground text-xs bg-transparent px-0 py-1" // System messages style
+                    : "text-muted-foreground text-xs bg-transparent px-0 py-1" 
                 )}
               >
                 {renderMessageContent(msg)}
               </div>
-               {(msg.type !== 'message' && msg.type !== 'action') && ( // Timestamp for system messages
+               {(msg.type !== 'message' && msg.type !== 'action') && ( 
                  <div className="text-xs text-muted-foreground mt-0.5">
                     {format(new Date(msg.timestamp), "HH:mm:ss")}
                   </div>
@@ -138,3 +157,4 @@ export function MessageArea({ messages, channelName }: MessageAreaProps) {
     </ScrollArea>
   );
 }
+

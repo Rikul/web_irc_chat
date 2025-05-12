@@ -24,16 +24,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ConnectDialog } from "./connect-dialog";
 import { SettingsDialog, type SettingsFormValues } from "./settings-dialog";
+import { ServerLogDialog } from "./server-log-dialog";
 import { ChannelList } from "./channel-list";
 import { AvailableChannelList } from "./available-channel-list";
 import { UserList } from "./user-list";
 import { MessageArea } from "./message-area";
 import { MessageInput } from "./message-input";
-import { ServerLogView } from "./server-log-view";
 import type { ServerConnection, Channel, User, Message, AvailableChannelInfo } from "@/lib/types";
 import { IrcService, type IrcServiceEventCallbacks } from "@/services/irc-service";
 import { useToast } from "@/hooks/use-toast";
-import { Server as ServerIcon, Hash, Users, MessageCircle, LogIn, LogOut, PlusCircle, Settings, Bot, List } from "lucide-react";
+import { Server as ServerIcon, Hash, Users, MessageCircle, LogIn, LogOut, PlusCircle, Settings, Bot, List, Terminal } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 export default function IrcClient() {
@@ -44,6 +44,7 @@ export default function IrcClient() {
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null); // serverId#channelName or serverId for server logs
   const [isConnectDialogOpen, setIsConnectDialogOpen] = useState(false);
   const [isSettingsDialogOpen, setIsSettingsDialogOpen] = useState(false);
+  const [isServerLogDialogOpen, setIsServerLogDialogOpen] = useState(false);
   const [joinChannelName, setJoinChannelName] = useState("");
   const [ircService, setIrcService] = useState<IrcService | null>(null);
   const [isListingChannels, setIsListingChannels] = useState(false);
@@ -56,8 +57,8 @@ export default function IrcClient() {
       return {
         id: activeServer.id,
         name: activeServer.host, // Display server host as name
-        messages: serverLogMessages,
-        users: [], // No users for server log
+        messages: serverLogMessages, // Pass serverLogMessages for the dialog
+        users: [],
         topic: { text: "Server messages and logs" },
         type: 'server'
       };
@@ -66,12 +67,14 @@ export default function IrcClient() {
   }, [activeServer, activeChannelId, channels, serverLogMessages]);
 
 
-  // Memoize callbacks for IrcService
   const serviceCallbacks: IrcServiceEventCallbacks = useMemo(() => ({
     onConnect: (serverId) => {
       setActiveServer(prev => prev && prev.id === serverId ? { ...prev, isConnected: true, isConnecting: false } : prev);
       setServerLogMessages(prev => [...prev, { id: crypto.randomUUID(), timestamp: Date.now(), content: `Connected to ${serverId}.`, type: 'info', channelId: serverId, target: serverId }]);
       toast({ title: "Connected!", description: `Successfully connected to ${serverId}.` });
+      if (ircService) { // Ensure ircService is available
+        ircService.listChannels();
+      }
     },
     onDisconnect: (serverId, reason) => {
       setActiveServer(prev => prev && prev.id === serverId ? { ...prev, isConnected: false, isConnecting: false } : null);
@@ -79,6 +82,7 @@ export default function IrcClient() {
       setChannels([]);
       setAvailableChannels([]);
       setActiveChannelId(null);
+      setIsServerLogDialogOpen(false); // Close server log dialog on disconnect
       toast({ title: "Disconnected", description: `Disconnected from ${serverId}. ${reason}` });
     },
     onError: (serverId, error) => {
@@ -96,15 +100,14 @@ export default function IrcClient() {
       setChannels(prev => prev.map(ch =>
         ch.id === message.channelId ? { ...ch, messages: [...ch.messages, message] } : ch
       ));
-       // If it's a PM, ensure a "channel" exists for it
-      if (!message.target.startsWith('#') && activeServer && message.nickname) {
+       if (!message.target.startsWith('#') && activeServer && message.nickname) {
           const pmChannelId = `${activeServer.id}${message.target.toLowerCase()}`;
           if (!channels.find(ch => ch.id === pmChannelId)) {
               const pmUserNick = message.isSelf ? message.target : message.nickname;
               const newPmChannel: Channel = {
                   id: pmChannelId,
                   serverId: activeServer.id,
-                  name: pmUserNick, // Channel name is the other user's nick for PMs
+                  name: pmUserNick, 
                   users: [
                       {id: activeServer.nickname, nickname: activeServer.nickname},
                       {id: pmUserNick, nickname: pmUserNick}
@@ -187,22 +190,21 @@ export default function IrcClient() {
     },
     onAvailableChannelsEnd: (serverId) => {
       setIsListingChannels(false);
-       // Sort available channels by user count (desc) then name (asc)
       setAvailableChannels(prev => [...prev].sort((a, b) => {
         if (a.userCount !== undefined && b.userCount !== undefined) {
           if (b.userCount !== a.userCount) {
             return b.userCount - a.userCount;
           }
         } else if (a.userCount !== undefined) {
-          return -1; // a has userCount, b doesn't, so a comes first
+          return -1; 
         } else if (b.userCount !== undefined) {
-          return 1; // b has userCount, a doesn't, so b comes first
+          return 1; 
         }
         return a.name.localeCompare(b.name);
       }));
     },
     onModeChange: (serverId, target, nick, modes, params) => {
-        const channelId = target.startsWith('#') ? `${serverId}${target}` : serverId; // serverId for user modes on self
+        const channelId = target.startsWith('#') ? `${serverId}${target}` : serverId; 
         const modeMsgContent = `Mode change: ${target} [${modes}${params.length > 0 ? ' ' + params.join(' ') : ''}] by ${nick}`;
         const message: Message = {
             id: crypto.randomUUID(),
@@ -216,13 +218,9 @@ export default function IrcClient() {
         };
         if (target.startsWith('#')) {
              setChannels(prev => prev.map(ch => ch.id === channelId ? {...ch, messages: [...ch.messages, message]} : ch));
-             // Potentially update user modes (isOp, isVoice) in ch.users if mode affects users
-             // This requires parsing the modes string, which can be complex.
-             // For now, just log the mode change. Re-requesting NAMES might be simpler if detailed user modes are critical.
-             // For common modes like +o/-o (op/deop), +v/-v (voice/devoice) on a user:
              if (ircService && target.startsWith('#')) {
-                // irc-framework's 'user updated' event might simplify this, or parse modes here.
-                // A NAMES refresh can also update this: this.client.names(target)
+                // Consider refreshing NAMES for the channel to update user modes visually
+                // this.ircService.sendRaw(`NAMES ${target}`);
              }
 
         } else {
@@ -255,12 +253,12 @@ export default function IrcClient() {
         if (nick.toLowerCase() === activeServer?.nickname.toLowerCase()) {
             toast({ title: `Kicked from ${channel}`, description: `By ${by}: ${reason || 'No reason'}`, variant: 'destructive' });
              if (activeChannelId === channelId) {
-                setActiveChannelId(activeServer?.id || null); // Switch to server log
+                setActiveChannelId(activeServer?.id || null); 
             }
         }
     }
 
-  }), [toast, activeServer, activeChannelId, setActiveServer, setChannels, setAvailableChannels, setServerLogMessages, setActiveChannelId, setIsListingChannels]); // Removed ircService from dependencies
+  }), [toast, activeServer, activeChannelId, ircService, setActiveServer, setChannels, setAvailableChannels, setServerLogMessages, setActiveChannelId, setIsListingChannels, setIsServerLogDialogOpen]);
 
   useEffect(() => {
     const service = new IrcService(serviceCallbacks);
@@ -280,7 +278,8 @@ export default function IrcClient() {
     setChannels([]);
     setAvailableChannels([]);
     setServerLogMessages([{ id: crypto.randomUUID(), timestamp: Date.now(), content: `Attempting to connect to ${details.host}...`, type: 'info', channelId: serverId, target: serverId }]);
-    setActiveChannelId(serverId); // Default to server log view on new connection attempt
+    setActiveChannelId(serverId); 
+    setIsServerLogDialogOpen(true); // Open server log dialog on new connection attempt
 
     ircService.connect(serverDetailsWithId);
   }, [ircService]);
@@ -288,7 +287,6 @@ export default function IrcClient() {
   const handleDisconnect = () => {
     if (activeServer && ircService) {
       ircService.disconnect();
-      // State updates handled by onDisconnect callback
     }
   };
 
@@ -308,12 +306,11 @@ export default function IrcClient() {
       return;
     }
     
-    // Add a placeholder channel optimistically
     const newChannelPlaceholder: Channel = {
         id: channelId,
         serverId: activeServer.id,
         name: properChannelName,
-        users: [{id: activeServer.nickname, nickname: activeServer.nickname}], // Add self immediately
+        users: [{id: activeServer.nickname, nickname: activeServer.nickname}], 
         messages: [{ id: crypto.randomUUID(), timestamp: Date.now(), type: 'info', content: `Joining ${properChannelName}...`, channelId: channelId, target: properChannelName }],
         topic: {text: `Joining ${properChannelName}...`}
     };
@@ -342,10 +339,10 @@ export default function IrcClient() {
     const channel = channels.find(c => c.id === channelIdToLeave);
     if (channel) {
       ircService.partChannel(channel.name);
-      // Optimistically remove or update state, IrcService onPart callback will confirm
       setChannels(prev => prev.filter(c => c.id !== channelIdToLeave));
       if (activeChannelId === channelIdToLeave) {
-        setActiveChannelId(activeServer.id); // Switch to server log view
+        setActiveChannelId(activeServer.id); 
+        setIsServerLogDialogOpen(true); // Show server log dialog if active channel was left
       }
       toast({
         title: "Channel Left",
@@ -356,12 +353,10 @@ export default function IrcClient() {
 
   const handleSendMessage = (text: string) => {
     if (!currentTarget || !activeServer || !activeServer.isConnected || !ircService) return;
-    // Do not send from server log "channel"
     if (currentTarget.type === 'server' || !currentTarget.name) return;
 
-    ircService.sendMessage(currentTarget.name, text); // target is channel name or user nick for PM
+    ircService.sendMessage(currentTarget.name, text); 
     
-    // Optimistic UI update for self-messages
     if (currentTarget.id && activeServer.nickname) {
         const selfMessage: Message = {
             id: crypto.randomUUID(),
@@ -386,12 +381,10 @@ export default function IrcClient() {
       const oldNickname = activeServer.nickname;
       if (newSettings.nickname !== oldNickname) {
         ircService.changeNick(newSettings.nickname);
-        // Nick change confirmation and state update will be handled by onNickChange callback
       }
-      // Update local activeServer for non-nick related settings immediately
       setActiveServer(prev => prev ? ({
         ...prev,
-        nickname: newSettings.nickname, // Optimistic update for nick too, confirmed by server event
+        nickname: newSettings.nickname, 
         realName: newSettings.realName,
         email: newSettings.email,
       }) : null);
@@ -402,9 +395,16 @@ export default function IrcClient() {
     setActiveChannelId(targetId);
     if (targetId.includes('#') && ircService && activeServer?.isConnected) {
         const channel = channels.find(c => c.id === targetId);
-        if (channel && channel.users.length <= 1) { // Only self or empty, refresh user list
+        if (channel && channel.users.length <= 1) { 
              ircService.sendRaw(`NAMES ${channel.name}`);
         }
+    }
+  };
+
+  const handleServerLogButtonClick = () => {
+    if (activeServer) {
+      handleSelectChannel(activeServer.id); // Set context
+      setIsServerLogDialogOpen(true);      // Open dialog
     }
   };
 
@@ -471,21 +471,20 @@ export default function IrcClient() {
                 </SidebarGroup>
                 
                 <SidebarSeparator />
-                {/* Server Log "Channel" */}
                  <div className="px-2 group-data-[collapsible=icon]:px-0">
                     <Button
                         variant={activeChannelId === activeServer.id ? "secondary" : "ghost"}
                         className="w-full justify-start h-8 text-sm mb-1 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:p-0 group-data-[collapsible=icon]:justify-center"
-                        onClick={() => handleSelectChannel(activeServer.id)}
-                        tooltip={{children: 'Server Log', side: 'right'}}
+                        onClick={handleServerLogButtonClick}
+                        tooltip={{children: 'Open Server Log Window', side: 'right'}}
                     >
-                        <ServerIcon className="h-4 w-4" />
+                        <Terminal className="h-4 w-4" /> 
                         <span className="ml-2 group-data-[collapsible=icon]:hidden">Server Log</span>
                     </Button>
                 </div>
 
 
-                <Accordion type="multiple" defaultValue={["joined-channels", "available-channels"]} className="w-full px-2 group-data-[collapsible=icon]:px-0">
+                <Accordion type="multiple" defaultValue={["joined-channels", "available-channels", "private-messages"]} className="w-full px-2 group-data-[collapsible=icon]:px-0">
                   <AccordionItem value="joined-channels" className="border-none">
                     <AccordionTrigger className="py-2 text-sm hover:no-underline group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:py-2 group-data-[collapsible=icon]:px-1 [&_svg.lucide-chevron-down]:group-data-[collapsible=icon]:hidden">
                       <div className="flex items-center gap-2 text-sidebar-foreground/80 hover:text-sidebar-foreground">
@@ -495,7 +494,7 @@ export default function IrcClient() {
                     </AccordionTrigger>
                     <AccordionContent className="pb-0 pt-1 group-data-[collapsible=icon]:hidden">
                       <ChannelList
-                        channels={channels.filter(c => c.name.startsWith('#'))} // Only actual channels
+                        channels={channels.filter(c => c.name.startsWith('#'))} 
                         activeChannelId={activeChannelId}
                         onSelectChannel={handleSelectChannel}
                         onLeaveChannel={handleLeaveChannel}
@@ -510,18 +509,14 @@ export default function IrcClient() {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent className="pb-0 pt-1 group-data-[collapsible=icon]:hidden">
-                      <ChannelList // Reuse ChannelList for PMs
-                        channels={channels.filter(c => !c.name.startsWith('#'))} // Only PM "channels"
+                      <ChannelList 
+                        channels={channels.filter(c => !c.name.startsWith('#'))} 
                         activeChannelId={activeChannelId}
                         onSelectChannel={handleSelectChannel}
-                        onLeaveChannel={handleLeaveChannel} // Leaving a PM usually means closing the window
+                        onLeaveChannel={handleLeaveChannel} 
                       />
                     </AccordionContent>
                   </AccordionItem>
-                </Accordion>
-
-                <SidebarSeparator />
-                <Accordion type="single" collapsible defaultValue="available-channels" className="w-full group-data-[collapsible=icon]:px-0">
                   <AccordionItem value="available-channels" className="border-none">
                     <AccordionTrigger className="py-2 text-sm hover:no-underline group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:py-2 group-data-[collapsible=icon]:px-1 [&_svg.lucide-chevron-down]:group-data-[collapsible=icon]:hidden">
                        <div className="flex items-center gap-2 text-sidebar-foreground/80 hover:text-sidebar-foreground">
@@ -552,24 +547,28 @@ export default function IrcClient() {
         </Sidebar>
 
         <SidebarInset className="flex flex-col max-h-screen min-w-0 flex-1">
-          {activeServer && currentTarget ? ( // currentTarget can be server or channel
+          {activeServer && currentTarget ? ( 
             <>
               <header className="p-3 border-b flex items-center justify-between bg-card shadow-sm flex-shrink-0">
                 <div className="flex items-center gap-2">
                    <div className="md:hidden">
                      <SidebarTrigger />
                    </div>
-                  {currentTarget.type !== 'server' ? <Hash className="h-5 w-5 text-muted-foreground" /> : <ServerIcon className="h-5 w-5 text-muted-foreground" />}
+                  {currentTarget.type !== 'server' ? <Hash className="h-5 w-5 text-muted-foreground" /> : <Terminal className="h-5 w-5 text-muted-foreground" />}
                   <div>
                     <h2 className="text-lg font-semibold">{currentTarget.name}</h2>
                     {currentTarget.topic?.text && <p className="text-xs text-muted-foreground truncate max-w-xs md:max-w-md lg:max-w-lg">{currentTarget.topic.text}</p>}
                   </div>
                 </div>
-                {/* Settings button is now in sidebar for connected server */}
               </header>
               <main className="flex flex-1 overflow-hidden p-2 md:p-3 gap-2 md:gap-3 bg-secondary/50">
                 <div className="flex-grow flex flex-col overflow-hidden min-w-0">
-                   <MessageArea messages={currentTarget.messages} channelName={currentTarget.name} />
+                   <MessageArea
+                     messages={currentTarget.messages}
+                     channelName={currentTarget.name}
+                     isServerLogView={currentTarget.type === 'server'}
+                     onOpenServerLogDialog={() => setIsServerLogDialogOpen(true)}
+                   />
                 </div>
                 {currentTarget.type !== 'server' && currentTarget.users && (
                   <aside className="w-48 md:w-56 lg:w-64 hidden sm:block flex-shrink-0 overflow-y-auto">
@@ -578,13 +577,8 @@ export default function IrcClient() {
                 )}
               </main>
               <MessageInput onSendMessage={handleSendMessage} disabled={!activeServer.isConnected || currentTarget.type === 'server'} />
-              {currentTarget.type === 'server' && ( // Show server log only if server log is active view
-                <div className="flex-shrink-0 border-t">
-                  {/* ServerLogView is part of MessageArea for server "channel" now */}
-                </div>
-              )}
             </>
-          ) : ( // Initial state or no active channel/server log
+          ) : ( 
             <div className="flex-1 flex flex-col items-center justify-center text-center p-6 bg-secondary/30">
                <div className="md:hidden mb-4">
                 <SidebarTrigger />
@@ -624,7 +618,7 @@ export default function IrcClient() {
         onOpenChange={setIsConnectDialogOpen}
         onConnect={handleConnect}
       />
-      {activeServer && ( // Settings dialog always available if server object exists
+      {activeServer && ( 
         <SettingsDialog
           isOpen={isSettingsDialogOpen}
           onOpenChange={setIsSettingsDialogOpen}
@@ -636,6 +630,15 @@ export default function IrcClient() {
           onSave={handleSaveSettings}
         />
       )}
+      {activeServer && (
+        <ServerLogDialog
+          isOpen={isServerLogDialogOpen}
+          onOpenChange={setIsServerLogDialogOpen}
+          messages={serverLogMessages}
+          serverName={activeServer.host}
+        />
+      )}
     </SidebarProvider>
   );
 }
+
