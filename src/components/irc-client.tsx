@@ -260,7 +260,7 @@ export default function IrcClient() {
         }
     }
 
-  }), [toast, activeServer, activeChannelId, ircService]); // Add ircService to dependencies if it can change
+  }), [toast, activeServer, activeChannelId, setActiveServer, setChannels, setAvailableChannels, setServerLogMessages, setActiveChannelId, setIsListingChannels]); // Removed ircService from dependencies
 
   useEffect(() => {
     const service = new IrcService(serviceCallbacks);
