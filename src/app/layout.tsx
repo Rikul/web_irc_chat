@@ -38,10 +38,11 @@ export default function RootLayout({
         <title>ViteChat - Modern IRC Client</title>
         <meta name="description" content="A clean and modern IRC client app built with Next.js." />
       </head>
-      <body className={`${GeistSans.variable} font-sans antialiased`}>
+      <body className={`${GeistSans.variable} font-sans antialiased`} suppressHydrationWarning>
         {children}
         <Toaster />
       </body>
     </html>
   );
 }
+
